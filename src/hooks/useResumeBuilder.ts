@@ -79,36 +79,51 @@ export function useResumeBuilder() {
   const parseResumeForExperience = (content: string) => {
     const experiences: Omit<WorkExperience, 'id' | 'resume_id' | 'created_at' | 'updated_at'>[] = [];
 
-    const lines = content.split('\n');
+    const lines = content.split('\n').map(l => l.trim());
     let currentExp: any = null;
     let order = 0;
 
     for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim();
+      const line = lines[i];
 
       if (!line) continue;
 
-      if (/^\d{1,2}\/\d{1,2}\/\d{2,4}|\d{4}/.test(line) || line.includes('-')) {
+      const dateRangePattern = /(\d{1,2}\/\d{4}|\d{4})\s*[-–—]\s*(Current|Present|\d{1,2}\/\d{4}|\d{4})/i;
+      const dateMatch = line.match(dateRangePattern);
+
+      if (dateMatch) {
         if (currentExp) {
           experiences.push(currentExp);
         }
 
-        const dateMatch = line.match(/(\d{1,2}\/\d{1,2}\/\d{2,4}|\d{4})\s*[-–]\s*(\d{1,2}\/\d{1,2}\/\d{2,4}|\d{4}|Present)/i);
-        const titleMatch = lines[i - 1]?.trim();
-        const companyMatch = lines[i - 2]?.trim();
+        let company = '';
+        let title = '';
+        const prevLine = lines[i - 1] || '';
+
+        if (prevLine.includes(' - ')) {
+          const parts = prevLine.split(' - ');
+          company = parts[0].trim();
+          title = parts.slice(1).join(' - ').trim();
+        } else {
+          const prevPrevLine = lines[i - 2] || '';
+          title = prevLine;
+          company = prevPrevLine;
+        }
 
         currentExp = {
-          title: titleMatch || 'Position Title',
-          company: companyMatch || 'Company Name',
-          start_date: dateMatch ? dateMatch[1] : '',
-          end_date: dateMatch ? dateMatch[2] : '',
+          title: title || 'Position Title',
+          company: company || 'Company Name',
+          start_date: dateMatch[1],
+          end_date: dateMatch[2],
           description: '',
           original_description: '',
           order: order++,
         };
-      } else if (currentExp && line && !line.match(/^\d{1,2}\/\d{1,2}\/\d{2,4}/)) {
-        currentExp.description += (currentExp.description ? '\n' : '') + line;
-        currentExp.original_description = currentExp.description;
+      } else if (currentExp && line && !dateRangePattern.test(line)) {
+        if (!line.match(/^[A-Z][a-z]+,\s+[A-Z]{2}\s*•/)) {
+          currentExp.description += (currentExp.description ? '\n' : '') + line;
+          currentExp.original_description = currentExp.description;
+        }
       }
     }
 
