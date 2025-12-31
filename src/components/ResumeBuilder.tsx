@@ -25,6 +25,57 @@ export function ResumeBuilder() {
   const [apiKey, setApiKey] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [jobDescription, setJobDescription] = useState('');
+  const [isUploadingFile, setIsUploadingFile] = useState(false);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const validTypes = [
+      'application/pdf',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/msword',
+    ];
+
+    if (!validTypes.includes(file.type)) {
+      alert('Please upload a PDF or DOCX file');
+      return;
+    }
+
+    setIsUploadingFile(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse-resume-file`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          },
+          body: formData,
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to parse file');
+      }
+
+      const data = await response.json();
+      setResumeContent(data.text);
+
+      if (!resumeTitle) {
+        setResumeTitle(file.name.replace(/\.(pdf|docx?)$/i, ''));
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to parse resume file');
+    } finally {
+      setIsUploadingFile(false);
+      e.target.value = '';
+    }
+  };
 
   const handleUploadResume = async () => {
     if (!resumeTitle.trim() || !resumeContent.trim()) {
@@ -136,6 +187,35 @@ export function ResumeBuilder() {
             </div>
 
             <div>
+              <label className="block text-sm font-medium mb-2">Upload File (PDF or DOCX)</label>
+              <label className="cursor-pointer w-full inline-flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed rounded-md hover:bg-slate-100 transition-colors">
+                <Upload className="w-5 h-5" />
+                <span className="font-medium">
+                  {isUploadingFile ? 'Processing file...' : 'Click to upload PDF or DOCX'}
+                </span>
+                <input
+                  type="file"
+                  accept=".pdf,.docx,.doc"
+                  onChange={handleFileUpload}
+                  disabled={isUploadingFile}
+                  className="hidden"
+                />
+              </label>
+              <p className="text-xs text-slate-600 mt-1">
+                Upload a PDF or DOCX file to extract your resume content automatically
+              </p>
+            </div>
+
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-slate-300"></div>
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-2 bg-slate-50 text-slate-500">or paste text</span>
+              </div>
+            </div>
+
+            <div>
               <label className="block text-sm font-medium mb-2">Resume Content</label>
               <textarea
                 value={resumeContent}
@@ -149,10 +229,11 @@ export function ResumeBuilder() {
             <div className="flex gap-2">
               <button
                 onClick={handleUploadResume}
-                className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+                disabled={isUploadingFile}
+                className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Upload className="w-4 h-4" />
-                Upload Resume
+                Save Resume
               </button>
               <button
                 onClick={() => {
@@ -160,7 +241,8 @@ export function ResumeBuilder() {
                   setResumeContent('');
                   setResumeTitle('');
                 }}
-                className="px-4 py-2 border rounded-md hover:bg-slate-100 transition-colors"
+                disabled={isUploadingFile}
+                className="px-4 py-2 border rounded-md hover:bg-slate-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>
